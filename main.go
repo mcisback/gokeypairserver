@@ -87,7 +87,7 @@ func processClient(clientsMap *ClientsMap, connection net.Conn) {
 
 			fmt.Println("Client DB: ", client.Db)
 
-			send(connection, "Thanks! Got your message:"+received)
+			send(connection, fmt.Sprintf("%s = %s setted", key, value))
 		} else if strings.HasPrefix(received, "GET") {
 			parts := strings.Split(received, " ")
 
