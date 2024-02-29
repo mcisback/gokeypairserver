@@ -155,7 +155,7 @@ func receive(connection net.Conn) (int, string, error) {
 	// var received string
 	// var buffer []byte
 
-	buffer := make([]byte, 4)
+	buffer := make([]byte, 1024)
 
 	mLen, err := connection.Read(buffer)
 
