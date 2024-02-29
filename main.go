@@ -62,40 +62,81 @@ func processClient(clientsMap *ClientsMap, connection net.Conn) {
 
 	fmt.Println("ClientsMap: ", *clientsMap)
 
+	var buffer string
+
+	fmt.Println("------------- START OF RECEIVING -------------")
+
 	for {
-		_, received, _ := receive(connection)
+		_, received, err := receive(connection)
 
-		if received == "QUIT" {
-			fmt.Println("Closing connection, bye bye")
-
-			connection.Close()
-
+		if err != nil {
 			break
 		}
 
-		if strings.HasPrefix(received, "SET") {
-			fmt.Println("Received SET")
+		if received != "\n" {
+			buffer += received
+		} else {
+			fmt.Println("------------- END OF RECEIVING -------------")
+		}
 
-			parts := strings.Split(received, " ")
+		fmt.Println("totalBuffer, len: ", buffer, len(buffer))
 
-			key := parts[1]
-			value := parts[2]
+		// What if value of key contains end ?
+		if received == "\n" && buffer != "" {
 
-			client := getCurrentClient(clientsMap, connection)
+			fmt.Println("totalBuffer, len: ", buffer, len(buffer))
 
-			client.Db[key] = value
+			// FIXME: should buffer == "ecc..."
+			if buffer == "QUIT" {
+				fmt.Println("Closing connection, bye bye")
 
-			fmt.Println("Client DB: ", client.Db)
+				connection.Close()
 
-			send(connection, fmt.Sprintf("%s = %s setted", key, value))
-		} else if strings.HasPrefix(received, "GET") {
-			parts := strings.Split(received, " ")
+				break
+			}
 
-			key := parts[1]
+			if strings.HasPrefix(buffer, "set") {
+				fmt.Println("Received SET")
 
-			client := getCurrentClient(clientsMap, connection)
+				parts := strings.Split(buffer, " ")
 
-			send(connection, client.Db[key])
+				fmt.Println("Parts:  ", parts)
+
+				key := parts[1]
+				value := strings.Join(parts[2:], " ")
+
+				client := getCurrentClient(clientsMap, connection)
+
+				client.Db[key] = strings.TrimSuffix(value, "\n")
+
+				fmt.Println("Client DB: ", client.Db)
+
+				send(connection, fmt.Sprintf("%s = %s setted", key, value))
+			} else if strings.HasPrefix(buffer, "get") {
+				parts := strings.Split(buffer, " ")
+
+				key := parts[1]
+
+				client := getCurrentClient(clientsMap, connection)
+
+				send(connection, client.Db[key])
+			} else if strings.HasPrefix(buffer, "del") {
+				parts := strings.Split(buffer, " ")
+
+				key := parts[1]
+
+				client := getCurrentClient(clientsMap, connection)
+
+				delete(client.Db, key)
+
+				fmt.Println("Client DB: ", client.Db)
+
+				send(connection, "Deleted")
+			} else {
+				send(connection, "Command Unknown")
+			}
+
+			buffer = ""
 		}
 
 	}
@@ -107,9 +148,18 @@ func getCurrentClient(clientsMap *ClientsMap, connection net.Conn) Client {
 }
 
 func receive(connection net.Conn) (int, string, error) {
-	buffer := make([]byte, 1024)
+	remoteAddr := connection.RemoteAddr().String()
+
+	// var totalBuffer []byte
+	// var totalLen int
+	// var received string
+	// var buffer []byte
+
+	buffer := make([]byte, 4)
 
 	mLen, err := connection.Read(buffer)
+
+	fmt.Println("receive() -> Buffer, mLen: ", string(buffer), mLen)
 
 	if err != nil {
 		fmt.Println("Error reading:", err.Error())
@@ -122,9 +172,11 @@ func receive(connection net.Conn) (int, string, error) {
 	}
 
 	received := string(buffer[:mLen])
-	received = strings.TrimSuffix(received, "\n")
 
-	fmt.Printf("Received:\"%s\"\n", received)
+	// Stripping \n could create problems ?
+	// received = strings.TrimSuffix(received, "\n")
+
+	fmt.Printf("Received[%s]:\"%s\"\n", remoteAddr, received)
 
 	return mLen, received, nil
 }
